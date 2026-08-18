@@ -120,7 +120,7 @@
             font-weight: 500;
         }
 
-        input[type="text"], input[type="date"] {
+        input[type="text"] {
             width: 100%;
             padding: 14px 18px;
             background-color: var(--bg-main);
@@ -133,6 +133,21 @@
 
         input:focus {
             border-color: var(--accent-blue);
+        }
+
+        .readonly-date-box {
+            width: 100%;
+            padding: 14px 18px;
+            background-color: rgba(15, 23, 42, 0.6);
+            border: 1px solid var(--border-color);
+            border-radius: var(--radius-md);
+            color: var(--accent-blue);
+            font-size: 1rem;
+            font-weight: 600;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            user-select: none;
         }
 
         .rules-card {
@@ -173,17 +188,24 @@
             transition: all 0.2s ease;
             display: flex;
             align-items: center;
+            justify-content: space-between;
             gap: 12px;
         }
 
-        .option-card:hover {
+        .option-content {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            flex: 1;
+        }
+
+        .option-card:hover:not(.locked) {
             border-color: var(--text-secondary);
             background: var(--bg-card-hover);
         }
 
-        .option-card.selected {
-            border-color: var(--accent-blue);
-            background: rgba(56, 189, 248, 0.1);
+        .option-card.locked {
+            cursor: not-allowed;
         }
 
         .option-radio {
@@ -194,15 +216,52 @@
             flex-shrink: 0;
         }
 
-        .option-card.selected .option-radio {
-            border-color: var(--accent-blue);
-            background: var(--accent-blue);
+        .option-card.correct-ans {
+            border-color: var(--accent-green) !important;
+            background: rgba(52, 211, 153, 0.15) !important;
+        }
+
+        .option-card.correct-ans .option-radio {
+            border-color: var(--accent-green) !important;
+            background: var(--accent-green) !important;
+        }
+
+        .option-card.wrong-ans {
+            border-color: var(--accent-red) !important;
+            background: rgba(248, 113, 113, 0.15) !important;
+        }
+
+        .option-card.wrong-ans .option-radio {
+            border-color: var(--accent-red) !important;
+            background: var(--accent-red) !important;
+        }
+
+        .feedback-badge {
+            font-size: 0.85rem;
+            font-weight: 700;
+            display: flex;
+            align-items: center;
+            gap: 6px;
+        }
+
+        .feedback-badge.correct { color: var(--accent-green); }
+        .feedback-badge.wrong { color: var(--accent-red); }
+
+        .instant-explanation {
+            margin-top: 18px;
+            padding: 16px;
+            background: var(--bg-main);
+            border-radius: var(--radius-md);
+            border-left: 4px solid var(--accent-blue);
+            font-size: 0.9rem;
+            display: none;
+            line-height: 1.5;
         }
 
         .btn-group {
             display: flex;
             gap: 12px;
-            margin-top: 32px;
+            margin-top: 28px;
         }
 
         .btn {
@@ -216,7 +275,6 @@
             align-items: center;
             justify-content: center;
             gap: 8px;
-            transition: opacity 0.2s ease;
         }
 
         .btn-primary {
@@ -296,6 +354,7 @@
             padding: 14px 16px;
             margin-bottom: 12px;
             font-size: 0.875rem;
+            line-height: 1.4;
         }
 
         .explanation-card strong { color: var(--accent-blue); }
@@ -317,11 +376,14 @@
         <!-- SCREEN 1: Registration -->
         <div class="screen active" id="registration-screen">
             <h2>Candidate Registration</h2>
-            <p class="subtitle">Select assessment date and enter your name to begin.</p>
+            <p class="subtitle">Enter your name to begin today's assessment.</p>
             
             <div class="input-group">
-                <label for="exam-date">Select Assessment Date</label>
-                <input type="date" id="exam-date" value="2026-08-13" required>
+                <label>Assessment Date (Locked)</label>
+                <div class="readonly-date-box">
+                    <i class="fa-regular fa-calendar-days"></i>
+                    <span id="display-assessment-date">2026-08-14</span>
+                </div>
             </div>
 
             <div class="input-group">
@@ -346,16 +408,17 @@
         <!-- SCREEN 2: Question Paper -->
         <div class="screen" id="exam-screen">
             <p class="subtitle" id="question-tracker">Question 1 of 0</p>
-            <h2 id="question-text">Loading question...</h2>
+            <h2 id="question-text" style="font-size: 1.25rem; line-height: 1.5;">Loading question...</h2>
 
             <div class="options-grid" id="options-container"></div>
+            <div class="instant-explanation" id="instant-explanation"></div>
 
             <div class="btn-group">
-                <button class="btn btn-secondary" onclick="skipQuestion()">
+                <button class="btn btn-secondary" id="skip-btn" onclick="skipQuestion()">
                     <i class="fa-solid fa-forward"></i> Skip Question
                 </button>
-                <button class="btn btn-primary" id="next-btn" onclick="submitAnswer()">
-                    Save & Next <i class="fa-solid fa-arrow-right"></i>
+                <button class="btn btn-primary" id="next-btn" onclick="advanceNext()">
+                    Next Question <i class="fa-solid fa-arrow-right"></i>
                 </button>
             </div>
         </div>
@@ -401,8 +464,20 @@
     </div>
 
     <script>
-        // PASTE YOUR GOOGLE APPS SCRIPT WEB APP URL HERE
-        const GOOGLE_APPS_SCRIPT_URL = "https://script.google.com/macros/s/AKfycbwKACMlO_2F6NpJsUn3zgx4pffayTVaiq57jYVbxk4WPdngger2XZ7pFWyF6cGWmZgtPw/exec";
+        // =========================================================================
+        // 1. SET YOUR GOOGLE APPS SCRIPT WEB APP URL HERE
+        // =========================================================================
+        const GOOGLE_APPS_SCRIPT_URL = "https://script.google.com/macros/s/AKfycbwEU7yjn3B9M1DS-ljjTZCLudZPHVkq6NlUPR9GCdbBqIqwwy6bCbglHZyup71zdoPsLg/exec";
+
+        // =========================================================================
+        // 2. ASSESSMENT DATE (Matches date in your 'gk' tab)
+        // =========================================================================
+        const ASSESSMENT_DATE = "2026-08-15"; 
+
+        const dateEl = document.getElementById('display-assessment-date');
+        if (dateEl) {
+            dateEl.textContent = ASSESSMENT_DATE;
+        }
 
         let examQuestions = [];
         let currentQuestionIndex = 0;
@@ -410,46 +485,67 @@
         let timerInterval = null;
         let timeRemaining = 900;
         let startTime = 0;
+        let isDataReady = false;
+
+        (async function prefetch() {
+            try {
+                const response = await fetch(`${GOOGLE_APPS_SCRIPT_URL}?date=${encodeURIComponent(ASSESSMENT_DATE)}`);
+                const data = await response.json();
+                if (data.status === "success" && data.questions && data.questions.length > 0) {
+                    examQuestions = data.questions;
+                    isDataReady = true;
+                }
+            } catch (e) {
+                console.warn("Prefetch standby:", e);
+            }
+        })();
 
         async function fetchAndStartExam() {
-            const dateInput = document.getElementById('exam-date').value;
             const nameInput = document.getElementById('candidate-name').value.trim();
 
-            if (!nameInput || !dateInput) {
-                alert("Please enter your name and select an assessment date.");
+            if (!nameInput) {
+                alert("Please enter your name to start the test.");
+                return;
+            }
+
+            if (isDataReady && examQuestions.length > 0) {
+                startExamScreen();
                 return;
             }
 
             const startBtn = document.getElementById('start-btn');
             startBtn.disabled = true;
-            startBtn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> Fetching Questions...';
+            startBtn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> Loading Questions...';
 
             try {
-                // Fetch dynamic questions from Google Sheet backend
-                const response = await fetch(`${GOOGLE_APPS_SCRIPT_URL}?date=${dateInput}`);
+                const response = await fetch(`${GOOGLE_APPS_SCRIPT_URL}?date=${encodeURIComponent(ASSESSMENT_DATE)}`);
                 const data = await response.json();
 
-                if (data.status === "success" && data.questions.length > 0) {
+                if (data.status === "success" && data.questions && data.questions.length > 0) {
                     examQuestions = data.questions;
-
-                    document.getElementById('registration-screen').classList.remove('active');
-                    document.getElementById('exam-screen').classList.add('active');
-                    document.getElementById('timer-container').style.display = 'flex';
-
-                    startTime = Date.now();
-                    startTimer();
-                    loadQuestion();
+                    isDataReady = true;
+                    startExamScreen();
                 } else {
-                    alert("No questions found for date: " + dateInput + ". Please check your Google Sheet.");
+                    alert("No questions found for date: " + ASSESSMENT_DATE + ". Please check your Google Sheet.");
                     startBtn.disabled = false;
                     startBtn.innerHTML = 'Fetch Questions & Start Test <i class="fa-solid fa-arrow-right"></i>';
                 }
             } catch (err) {
-                alert("Failed to connect to Google Sheet database. Please check your Apps Script Web App URL.");
+                alert("Failed to connect to backend database.");
                 console.error(err);
                 startBtn.disabled = false;
                 startBtn.innerHTML = 'Fetch Questions & Start Test <i class="fa-solid fa-arrow-right"></i>';
             }
+        }
+
+        function startExamScreen() {
+            document.getElementById('registration-screen').classList.remove('active');
+            document.getElementById('exam-screen').classList.add('active');
+            document.getElementById('timer-container').style.display = 'flex';
+
+            startTime = Date.now();
+            startTimer();
+            loadQuestion();
         }
 
         function startTimer() {
@@ -475,49 +571,96 @@
             const optionsContainer = document.getElementById('options-container');
             optionsContainer.innerHTML = '';
 
+            const explanationBox = document.getElementById('instant-explanation');
+            explanationBox.style.display = 'none';
+            explanationBox.innerHTML = '';
+
+            const isAnswered = selectedAnswers[currentQuestionIndex] !== undefined;
+
             q.options.forEach((opt, idx) => {
-                const isSelected = selectedAnswers[currentQuestionIndex] === idx;
                 const optionCard = document.createElement('div');
-                optionCard.className = `option-card ${isSelected ? 'selected' : ''}`;
-                optionCard.onclick = () => selectOption(idx);
+                optionCard.className = 'option-card';
+                optionCard.id = `option-${idx}`;
+                
+                let feedbackHtml = '';
+
+                if (isAnswered) {
+                    optionCard.classList.add('locked');
+                    const userSelected = selectedAnswers[currentQuestionIndex];
+
+                    if (idx === q.correct) {
+                        optionCard.classList.add('correct-ans');
+                        feedbackHtml = `<span class="feedback-badge correct"><i class="fa-solid fa-circle-check"></i> Correct</span>`;
+                    } else if (idx === userSelected && userSelected !== q.correct) {
+                        optionCard.classList.add('wrong-ans');
+                        feedbackHtml = `<span class="feedback-badge wrong"><i class="fa-solid fa-circle-xmark"></i> Incorrect</span>`;
+                    }
+                } else {
+                    optionCard.onclick = () => selectOption(idx);
+                }
+
                 optionCard.innerHTML = `
-                    <div class="option-radio"></div>
-                    <div>${opt}</div>
+                    <div class="option-content">
+                        <div class="option-radio"></div>
+                        <div>${opt}</div>
+                    </div>
+                    ${feedbackHtml}
                 `;
                 optionsContainer.appendChild(optionCard);
             });
+
+            if (isAnswered && selectedAnswers[currentQuestionIndex] !== null) {
+                explanationBox.style.display = 'block';
+                explanationBox.innerHTML = `<strong>Explanation:</strong> ${q.explanation || 'No explanation provided.'}`;
+            }
 
             const nextBtn = document.getElementById('next-btn');
             if (currentQuestionIndex === examQuestions.length - 1) {
                 nextBtn.innerHTML = 'Submit Test <i class="fa-solid fa-check"></i>';
             } else {
-                nextBtn.innerHTML = 'Save & Next <i class="fa-solid fa-arrow-right"></i>';
+                nextBtn.innerHTML = 'Next Question <i class="fa-solid fa-arrow-right"></i>';
             }
         }
 
-        function selectOption(index) {
-            if (selectedAnswers[currentQuestionIndex] === index) {
-                delete selectedAnswers[currentQuestionIndex];
-            } else {
-                selectedAnswers[currentQuestionIndex] = index;
-            }
-            loadQuestion();
+        function selectOption(selectedIndex) {
+            if (selectedAnswers[currentQuestionIndex] !== undefined) return;
+
+            const q = examQuestions[currentQuestionIndex];
+            selectedAnswers[currentQuestionIndex] = selectedIndex;
+
+            q.options.forEach((_, idx) => {
+                const card = document.getElementById(`option-${idx}`);
+                if (!card) return;
+                card.onclick = null;
+                card.classList.add('locked');
+
+                if (idx === q.correct) {
+                    card.classList.add('correct-ans');
+                    card.innerHTML += `<span class="feedback-badge correct"><i class="fa-solid fa-circle-check"></i> Correct</span>`;
+                } else if (idx === selectedIndex && selectedIndex !== q.correct) {
+                    card.classList.add('wrong-ans');
+                    card.innerHTML += `<span class="feedback-badge wrong"><i class="fa-solid fa-circle-xmark"></i> Incorrect</span>`;
+                }
+            });
+
+            const explanationBox = document.getElementById('instant-explanation');
+            explanationBox.style.display = 'block';
+            explanationBox.innerHTML = `<strong>Explanation:</strong> ${q.explanation || 'No explanation provided.'}`;
         }
 
         function skipQuestion() {
-            selectedAnswers[currentQuestionIndex] = null;
-            advanceNext();
-        }
-
-        function submitAnswer() {
             if (selectedAnswers[currentQuestionIndex] === undefined) {
-                alert("Please select an answer or click 'Skip Question' to move ahead.");
-                return;
+                selectedAnswers[currentQuestionIndex] = null;
             }
             advanceNext();
         }
 
         function advanceNext() {
+            if (selectedAnswers[currentQuestionIndex] === undefined) {
+                alert("Please select an answer or click 'Skip Question' to move ahead.");
+                return;
+            }
+
             if (currentQuestionIndex < examQuestions.length - 1) {
                 currentQuestionIndex++;
                 loadQuestion();
@@ -534,16 +677,13 @@
             document.getElementById('result-screen').classList.add('active');
 
             const candidateName = document.getElementById('candidate-name').value;
-            const examDate = document.getElementById('exam-date').value;
-
-            document.getElementById('candidate-greeting').textContent = `Candidate Report for ${candidateName}`;
+            document.getElementById('candidate-greeting').textContent = `Candidate Report for ${candidateName} | Date: ${ASSESSMENT_DATE}`;
 
             let totalScore = 0;
             let correctCount = 0;
             let wrongCount = 0;
             let skippedCount = 0;
 
-            // Track performance per category
             const categoryStats = {};
 
             examQuestions.forEach((q, idx) => {
@@ -574,13 +714,11 @@
             document.getElementById('count-wrong').textContent = wrongCount;
             document.getElementById('count-skipped').textContent = skippedCount;
 
-            // Category Wise Performance Analysis Logic
             const categoryContainer = document.getElementById('category-analysis-container');
             categoryContainer.innerHTML = '';
 
             Object.keys(categoryStats).forEach(category => {
                 const stats = categoryStats[category];
-                // Category is marked weak if there is 1 or more wrong answers
                 const isWeak = stats.wrong > 0;
 
                 const tag = document.createElement('div');
@@ -599,7 +737,6 @@
                 categoryContainer.appendChild(tag);
             });
 
-            // Render Explanations
             const explanationsContainer = document.getElementById('explanations-container');
             explanationsContainer.innerHTML = '';
             examQuestions.forEach((q, idx) => {
@@ -614,20 +751,19 @@
 
             const timeTakenMins = Math.ceil((Date.now() - startTime) / 60000);
 
-            // POST result to Google Sheet backend
             fetch(GOOGLE_APPS_SCRIPT_URL, {
                 method: 'POST',
                 mode: 'no-cors',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({
-                    date: examDate,
+                    date: ASSESSMENT_DATE,
                     student_name: candidateName,
                     student_id: candidateName.replace(/\s+/g, '_').toLowerCase(),
                     score: totalScore,
                     total_questions: examQuestions.length,
                     time_taken_mins: timeTakenMins
                 })
-            }).catch(err => console.error("Error saving result to sheet:", err));
+            }).catch(err => console.error("Error saving result:", err));
         }
     </script>
 </body>
